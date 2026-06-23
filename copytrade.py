@@ -260,6 +260,7 @@ def main() -> int:
     p = argparse.ArgumentParser(description="Polymarket copy-trade PnL simulator")
     src = p.add_mutually_exclusive_group()
     src.add_argument("--address", help="target wallet 0x... (auto-fetch via data-api)")
+    src.add_argument("--trader", help="known handle from traders.json (e.g. japeththegoat)")
     src.add_argument("--csv", help="his fills as CSV (timestamp,side,asset,price,size,title)")
     src.add_argument("--demo", action="store_true", help="run the illustrative example prices")
     src.add_argument("--grid", action="store_true", help="size-independent PnL lookup table")
@@ -273,6 +274,19 @@ def main() -> int:
 
     start_ts = to_epoch(args.start) if args.start else None
     end_ts = to_epoch(args.end) if args.end else None
+
+    if args.trader:  # resolve a known handle/alias to its address
+        import json as _json
+        with open("traders.json", encoding="utf-8") as _fh:
+            cat = _json.load(_fh)["traders"]
+        addr = None
+        for handle, meta in cat.items():
+            if args.trader.lower() in [handle.lower(), *[a.lower() for a in meta.get("aliases", [])]]:
+                addr = meta["address"]
+                break
+        if not addr:
+            sys.exit(f"Unknown trader '{args.trader}'. Known: {', '.join(cat)}")
+        args.address = addr
 
     if args.grid:
         print(grid(args.copy_fraction, args.slippage))
