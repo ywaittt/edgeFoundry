@@ -1,0 +1,3 @@
+timestamp,side,asset,price,size,title
+2026-06-21T09:05:00+03:00,BUY,outcome-1,0.27,500,Example market name
+2026-06-21T11:20:00+03:00,SELL,outcome-1,0.15,500,Example market name
