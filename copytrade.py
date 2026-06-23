@@ -229,12 +229,40 @@ def render(res: Dict[str, Any], *, copy_fraction: float, slippage: float,
     return "\n".join(L)
 
 
+def grid(copy_fraction: float, slippage: float,
+         entries=(0.10, 0.15, 0.20, 0.27, 0.30, 0.40),
+         exits=(0.05, 0.10, 0.15, 0.20, 0.30, 0.50, 1.00)) -> str:
+    """Size-independent lookup table: his PnL / your copy PnL per $100 he staked,
+    for every (entry, exit) combo. An exit of 1.00 = held to a YES resolution.
+    Scale any cell by (his real stake / 100) for dollars."""
+    L = [f"Per $100 of HIS stake | sizing {copy_fraction:.0%} | slippage "
+         f"{slippage*100:.0f}c each side | cells = HIS / YOU",
+         "entry\\exit | " + " | ".join(f"{e:.2f}" if e < 1 else "RES$1" for e in exits)]
+    L.append("-" * len(L[-1]))
+    for en in entries:
+        his_size = 100.0 / en
+        cells = []
+        for ex in exits:
+            if ex >= 1.0:
+                fills = [{"timestamp": 1, "side": "BUY", "asset": "X", "price": en, "size": his_size}]
+                r = simulate(fills, copy_fraction=copy_fraction, slippage=slippage, resolution={"X": 1.0})
+            else:
+                fills = [{"timestamp": 1, "side": "BUY", "asset": "X", "price": en, "size": his_size},
+                         {"timestamp": 2, "side": "SELL", "asset": "X", "price": ex, "size": his_size}]
+                r = simulate(fills, copy_fraction=copy_fraction, slippage=slippage)
+            cells.append(f"{r['his_pnl']:+.0f}/{r['my_pnl']:+.0f}")
+        L.append(f"  {en:.2f}    | " + " | ".join(cells))
+    L.append("\nRead his (entry,exit) cell, then multiply by (his real stake / 100).")
+    return "\n".join(L)
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description="Polymarket copy-trade PnL simulator")
     src = p.add_mutually_exclusive_group()
     src.add_argument("--address", help="target wallet 0x... (auto-fetch via data-api)")
     src.add_argument("--csv", help="his fills as CSV (timestamp,side,asset,price,size,title)")
     src.add_argument("--demo", action="store_true", help="run the illustrative example prices")
+    src.add_argument("--grid", action="store_true", help="size-independent PnL lookup table")
     p.add_argument("--start", help="copy fills at/after this time (ISO8601; naive=GMT+3)")
     p.add_argument("--end", help="copy fills at/before this time")
     p.add_argument("--copy-fraction", type=float, default=0.65)
@@ -245,6 +273,10 @@ def main() -> int:
 
     start_ts = to_epoch(args.start) if args.start else None
     end_ts = to_epoch(args.end) if args.end else None
+
+    if args.grid:
+        print(grid(args.copy_fraction, args.slippage))
+        return 0
 
     if args.demo:
         fills, label = demo_fills(), "ILLUSTRATIVE (example prices, not real fills)"
